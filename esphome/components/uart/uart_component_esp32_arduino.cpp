@@ -86,7 +86,19 @@ void ESP32ArduinoUARTComponent::setup() {
   is_default_tx = tx_pin_ == nullptr || tx_pin_->get_pin() == 1;
   is_default_rx = rx_pin_ == nullptr || rx_pin_->get_pin() == 3;
 #endif
+
+// 一个临时补丁，让USB-CDC串口和UART串口共存！(*23年3月7日*17时15分)
+// 这里需要考虑后来融入的新代码，为了让这个工作的更好，需要考虑这些发生的情况。(*23年5月23日*10时59分)
+#if defined(USE_ARDUINO) && defined(ARDUINO_USB_CDC_ON_BOOT) && ((defined(USE_ESP32_VARIANT_ESP32C3) && defined(ARDUINO_USB_MODE)) || defined(USE_ESP32_VARIANT_ESP32S2))
+  static uint8_t next_uart_num = 1;
+
+  this->number_ = next_uart_num;
+  this->hw_serial_ = new HardwareSerial(next_uart_num++);  // NOLINT(cppcoreguidelines-owning-memory)
+
+#else
+
   static uint8_t next_uart_num = 0;
+  // 问题在于这里，对于c3来说，似乎造成了一个硬件uart的冲突事件。(*23年5月23日*10时59分)
   if (is_default_tx && is_default_rx && next_uart_num == 0) {
     this->hw_serial_ = &Serial;
     next_uart_num++;
@@ -109,6 +121,8 @@ void ESP32ArduinoUARTComponent::setup() {
     this->number_ = next_uart_num;
     this->hw_serial_ = new HardwareSerial(next_uart_num++);  // NOLINT(cppcoreguidelines-owning-memory)
   }
+#endif
+
   int8_t tx = this->tx_pin_ != nullptr ? this->tx_pin_->get_pin() : -1;
   int8_t rx = this->rx_pin_ != nullptr ? this->rx_pin_->get_pin() : -1;
   bool invert = false;
